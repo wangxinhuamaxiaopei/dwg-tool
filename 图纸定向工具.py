@@ -159,7 +159,7 @@ def calc_rotation(block_corner):
 
 def process(folder, mode='merge'):
     """
-    处理文件夹中所有PDF
+    处理文件夹中所有PDF，不修改原文件
     mode: 'merge' 合并成一个, 'individual' 保留独立文件
     """
     # 收集PDF
@@ -186,7 +186,7 @@ def process(folder, mode='merge'):
 
     print(f"  共 {len(pdf_files)} 个文件, {total_pages} 页\n")
 
-    # 逐文件处理
+    # 逐文件处理（在内存中旋转，保存到输出目录）
     rotated_count = 0
     skipped_count = 0
     done = 0
@@ -219,16 +219,18 @@ def process(folder, mode='merge'):
             else:
                 skipped_count += 1
 
-        # 保存修改
-        tmp = pdf_path + '.tmp'
-        doc.save(tmp, deflate=True)
+        # 保存到输出目录（不碰原文件）
+        if mode == 'individual':
+            base = os.path.splitext(name)[0]
+            out_name = base + '_已修正.pdf'
+            out_path = os.path.join(out_dir, out_name)
+            doc.save(out_path, deflate=True)
         doc.close()
-        os.replace(tmp, pdf_path)
 
     sys.stdout.write(f"\r  {'':>50}\r")
     sys.stdout.flush()
 
-    # ── 生成输出 ──
+    # ── 生成最终输出 ──
     print("  正在生成输出文件...")
     outputs = []
 
@@ -236,6 +238,15 @@ def process(folder, mode='merge'):
         merged = fitz.open()
         for pdf_path in pdf_files:
             d = fitz.open(pdf_path)
+            # 逐页读取并应用旋转
+            for i in range(d.page_count):
+                pg = d[i]
+                old_rot = pg.rotation or 0
+                block = find_title_block(pg)
+                delta = calc_rotation(block)
+                new_rot = (old_rot + delta) % 360
+                if new_rot != old_rot:
+                    pg.set_rotation(new_rot)
             merged.insert_pdf(d)
             d.close()
         out_name = fn + '_合并统一方向.pdf'
@@ -244,14 +255,13 @@ def process(folder, mode='merge'):
         merged.close()
         outputs.append(out_path)
     else:
+        # individual 模式已经在前面保存了，这里收集文件路径
         for pdf_path in pdf_files:
-            d = fitz.open(pdf_path)
             base = os.path.splitext(os.path.basename(pdf_path))[0]
             out_name = base + '_已修正.pdf'
             out_path = os.path.join(out_dir, out_name)
-            d.save(out_path, deflate=True)
-            d.close()
-            outputs.append(out_path)
+            if os.path.exists(out_path):
+                outputs.append(out_path)
 
     return {
         'total': total_pages,
