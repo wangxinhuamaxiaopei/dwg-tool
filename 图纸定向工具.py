@@ -279,19 +279,25 @@ def main():
     # ── 选文件夹 ──
     while True:
         try:
-            raw = input("  文件夹路径 (可拖拽文件夹到此处) > ").strip().strip('"').strip("'")
+            raw = input("  文件夹路径 (可拖拽文件夹或文件到此处) > ").strip().strip('"').strip("'")
         except (EOFError, KeyboardInterrupt):
             return
         if not raw:
             print("  不能为空")
             continue
-        f = os.path.abspath(raw)
-        if not os.path.isdir(f):
-            print(f"  找不到: {f}")
+        p = os.path.abspath(raw)
+        # 如果拖入的是文件，自动使用它所在的文件夹
+        if os.path.isfile(p):
+            f = os.path.dirname(p)
+            print(f"  📄 识别为文件，自动使用所在文件夹")
+        elif os.path.isdir(p):
+            f = p
+        else:
+            print(f"  找不到路径: {p}")
             continue
         pdfs = [x for x in os.listdir(f) if x.lower().endswith('.pdf')]
         if not pdfs:
-            print("  该文件夹中没有 PDF 文件")
+            print(f"  该文件夹中没有 PDF 文件")
             if input("  重新选择? (y/n): ").strip().lower() != 'y':
                 return
             continue
